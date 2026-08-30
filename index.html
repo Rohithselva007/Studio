@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voxreel — Text to Speech Studio</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.0/lame.min.js"></script>
+<style>
+  :root{
+    --bg:#14151c;
+    --panel:#1d1f2b;
+    --panel-raised:#242739;
+    --groove:#0e0f15;
+    --text:#e8e6e1;
+    --muted:#8a8d9f;
+    --amber:#f2a65a;
+    --amber-dim:#8a6236;
+    --rec:#e85d5d;
+    --green:#6ee7b7;
+    --line:#2c2f40;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:radial-gradient(1200px 600px at 50% -10%, #1a1c28 0%, var(--bg) 60%);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:40px 16px 60px;
+  }
+  .deck{
+    width:100%;
+    max-width:760px;
+    background:linear-gradient(180deg, var(--panel-raised), var(--panel));
+    border:1px solid var(--line);
+    border-radius:18px;
+    box-shadow:0 30px 60px -20px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.03);
+    overflow:hidden;
+  }
+  .deck-top{
+    padding:22px 26px 16px;
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    border-bottom:1px solid var(--line);
+  }
+  .brand{display:flex;align-items:baseline;gap:10px;}
+  .brand-mark{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:20px;letter-spacing:0.02em;}
+  .brand-mark span{color:var(--amber);}
+  .brand-sub{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;}
+  .status-lamp{display:flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;}
+  .lamp-dot{width:8px;height:8px;border-radius:50%;background:var(--line);transition:all .2s ease;}
+  .lamp-dot.on{background:var(--green);box-shadow:0 0 8px var(--green);}
+  .lamp-dot.rec{background:var(--rec);box-shadow:0 0 8px var(--rec);}
+
+  .wave-window{
+    margin:20px 26px 6px;
+    background:var(--groove);
+    border-radius:12px;
+    border:1px solid var(--line);
+    padding:18px 20px;
+    position:relative;
+    overflow:hidden;
+  }
+  .wave-bars{height:88px;display:flex;align-items:center;gap:3px;}
+  .wave-bars span{
+    flex:1;min-width:2px;
+    background:linear-gradient(180deg, var(--amber), var(--amber-dim));
+    border-radius:2px;height:6%;
+    transition:height .09s ease;
+  }
+  .wave-bars span.active{background:linear-gradient(180deg, var(--green), #2d8f6f);}
+  .wave-readout{display:flex;justify-content:space-between;margin-top:12px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);letter-spacing:0.04em;}
+  .wave-readout b{color:var(--text);font-weight:500;}
+
+  .script-wrap{margin:18px 26px 6px;}
+  .script-label{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;}
+  textarea{
+    width:100%;min-height:130px;resize:vertical;
+    background:var(--groove);border:1px solid var(--line);border-radius:10px;
+    color:var(--text);font-family:'Inter',sans-serif;font-size:15px;line-height:1.55;
+    padding:14px 16px;outline:none;transition:border-color .15s ease;
+  }
+  textarea:focus{border-color:var(--amber-dim);}
+  textarea::placeholder{color:#565a6e;}
+
+  .controls{margin:18px 26px 4px;display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .field{background:var(--groove);border:1px solid var(--line);border-radius:10px;padding:12px 14px;}
+  .field.full{grid-column:1/-1;}
+  .field label{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;}
+  .field label b{color:var(--amber);font-weight:500;}
+  select{
+    width:100%;background:var(--panel-raised);color:var(--text);
+    border:1px solid var(--line);border-radius:7px;padding:9px 10px;
+    font-family:'Inter',sans-serif;font-size:13.5px;outline:none;
+  }
+  input[type="range"]{-webkit-appearance:none;width:100%;height:4px;background:var(--line);border-radius:3px;outline:none;}
+  input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--amber);border:2px solid #14151c;box-shadow:0 0 0 1px var(--amber-dim);
+    cursor:pointer;margin-top:-5.5px;
+  }
+  input[type="range"]::-moz-range-thumb{
+    width:15px;height:15px;border-radius:50%;background:var(--amber);
+    border:2px solid #14151c;box-shadow:0 0 0 1px var(--amber-dim);cursor:pointer;
+  }
+  input[type="range"]::-webkit-slider-runnable-track{
+    height:4px;border-radius:3px;
+    background:linear-gradient(90deg, var(--amber) var(--fill,50%), var(--line) var(--fill,50%));
+  }
+
+  .transport{margin:20px 26px 8px;display:flex;align-items:center;gap:10px;}
+  button{
+    font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13.5px;
+    border-radius:9px;border:1px solid var(--line);background:var(--panel-raised);
+    color:var(--text);padding:12px 16px;cursor:pointer;display:flex;align-items:center;gap:8px;
+    transition:transform .08s ease, border-color .15s ease, background .15s ease;
+  }
+  button:hover{border-color:var(--amber-dim);}
+  button:active{transform:scale(0.97);}
+  button:disabled{opacity:0.4;cursor:not-allowed;transform:none;}
+  button.primary{background:linear-gradient(180deg, #ffb877, var(--amber));color:#221607;border-color:transparent;flex:1;justify-content:center;}
+  button.primary:hover{filter:brightness(1.06);}
+  button.icon-only{padding:12px 14px;}
+  .transport svg{width:15px;height:15px;flex-shrink:0;}
+
+  .export-section{margin:6px 26px 8px;border-top:1px solid var(--line);padding-top:18px;}
+  .export-heading{
+    display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;
+  }
+  .export-heading .title{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13.5px;}
+  .format-select{width:150px;}
+  .export-row{display:flex;gap:10px;}
+  button.export{flex:1;justify-content:center;background:transparent;border:1px dashed var(--line);color:var(--muted);}
+  button.export:hover{border-color:var(--rec);color:var(--text);}
+  button.export.recording{border-style:solid;border-color:var(--rec);color:var(--rec);}
+
+  /* Batch queue */
+  .batch-toggle{
+    display:flex;align-items:center;gap:8px;
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);
+    text-transform:uppercase;letter-spacing:0.06em;cursor:pointer;user-select:none;
+  }
+  .switch{
+    width:32px;height:18px;border-radius:10px;background:var(--line);
+    position:relative;transition:background .15s ease;flex-shrink:0;
+  }
+  .switch::after{
+    content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;
+    background:var(--muted);transition:all .15s ease;
+  }
+  .switch.on{background:var(--amber-dim);}
+  .switch.on::after{left:16px;background:var(--amber);}
+
+  .batch-panel{display:none;margin-top:14px;}
+  .batch-panel.open{display:block;}
+  .queue-list{display:flex;flex-direction:column;gap:8px;margin-bottom:10px;}
+  .queue-item{
+    display:flex;align-items:center;gap:10px;
+    background:var(--groove);border:1px solid var(--line);border-radius:8px;
+    padding:9px 12px;
+  }
+  .queue-item .idx{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--amber);
+    width:20px;flex-shrink:0;
+  }
+  .queue-item .preview{
+    flex:1;font-size:13px;color:var(--text);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .queue-item .remove{
+    background:none;border:none;color:var(--muted);cursor:pointer;
+    padding:2px 6px;font-size:15px;line-height:1;
+  }
+  .queue-item .remove:hover{color:var(--rec);}
+  .queue-empty{
+    font-size:12.5px;color:var(--muted);font-style:italic;
+    padding:14px;text-align:center;border:1px dashed var(--line);border-radius:8px;
+  }
+  .add-row{display:flex;gap:8px;margin-bottom:10px;}
+  .add-row input{
+    flex:1;background:var(--groove);border:1px solid var(--line);border-radius:8px;
+    color:var(--text);font-family:'Inter',sans-serif;font-size:13.5px;padding:10px 12px;outline:none;
+  }
+  .add-row input:focus{border-color:var(--amber-dim);}
+  .batch-progress{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);
+    margin-top:8px;min-height:14px;
+  }
+
+  .phrase-chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px;}
+  .chip{
+    font-family:'Inter',sans-serif;font-weight:500;font-size:12px;
+    background:var(--panel-raised);border:1px solid var(--line);color:var(--muted);
+    padding:7px 11px;border-radius:999px;cursor:pointer;transition:all .12s ease;
+  }
+  .chip:hover{border-color:var(--amber-dim);color:var(--text);}
+  .chip:active{transform:scale(0.96);}
+
+  .fx-section{margin:6px 26px 8px;border-top:1px solid var(--line);padding-top:18px;}
+  .fx-heading{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+  .fx-heading .title{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13.5px;}
+  .fx-heading .sub{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted);}
+  .fx-grid{
+    display:grid;grid-template-columns:repeat(4, 1fr);gap:10px;margin-top:12px;
+  }
+  .fx-card{
+    background:var(--groove);border:1px solid var(--line);border-radius:10px;
+    padding:12px 10px 10px;display:flex;flex-direction:column;align-items:center;gap:8px;
+    transition:border-color .12s ease;
+  }
+  .fx-card.playing{border-color:var(--green);}
+  .fx-emoji{font-size:20px;line-height:1;}
+  .fx-label{
+    font-family:'Inter',sans-serif;font-size:11.5px;color:var(--text);
+    text-align:center;line-height:1.25;min-height:28px;
+  }
+  .fx-btns{display:flex;gap:6px;width:100%;}
+  .fx-btns button{
+    flex:1;padding:7px 4px;justify-content:center;font-size:11px;
+    background:var(--panel-raised);
+  }
+  .fx-btns svg{width:12px;height:12px;}
+
+  .note{
+    margin:0 26px 24px;font-size:12px;color:var(--muted);line-height:1.6;
+    border-top:1px solid var(--line);padding-top:14px;
+  }
+  .note b{color:var(--text);}
+  @media (max-width:480px){
+    .fx-grid{grid-template-columns:repeat(2, 1fr);}
+  }
+
+  @media (max-width:480px){
+    .controls{grid-template-columns:1fr;}
+    .deck-top{flex-direction:column;align-items:flex-start;gap:6px;}
+    .export-heading{flex-direction:column;align-items:flex-start;gap:8px;}
+    .format-select{width:100%;}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .wave-bars span{transition:none;}
+  }
+</style>
+</head>
+<body>
+
+<div class="deck">
+  <div class="deck-top">
+    <div class="brand">
+      <div class="brand-mark">VOX<span>REEL</span></div>
+      <div class="brand-sub">TTS Studio</div>
+    </div>
+    <div class="status-lamp"><span class="lamp-dot" id="lampDot"></span><span id="lampText">Idle</span></div>
+  </div>
+
+  <div class="wave-window">
+    <div class="wave-bars" id="waveBars"></div>
+    <div class="wave-readout">
+      <span>Voice: <b id="readoutVoice">—</b></span>
+      <span>Rate: <b id="readoutRate">1.0×</b></span>
+      <span>Pitch: <b id="readoutPitch">1.0</b></span>
+    </div>
+  </div>
+
+  <div class="script-wrap">
+    <div class="script-label"><span>Script</span><span id="charCount">0 characters</span></div>
+    <div class="phrase-chips" id="phraseChips"></div>
+    <textarea id="textInput" placeholder="Type or paste the script you want narrated...">The waveform above will dance in sync with your words. Type something here, pick a voice below, then press play.</textarea>
+  </div>
+
+  <div class="controls">
+    <div class="field full">
+      <label>Voice <b id="voiceCountLabel"></b></label>
+      <select id="voiceSelect"></select>
+    </div>
+    <div class="field">
+      <label>Rate <span id="rateVal">1.0×</span></label>
+      <input type="range" id="rateSlider" min="0.5" max="2" step="0.1" value="1">
+    </div>
+    <div class="field">
+      <label>Pitch <span id="pitchVal">1.0</span></label>
+      <input type="range" id="pitchSlider" min="0" max="2" step="0.1" value="1">
+    </div>
+    <div class="field">
+      <label>Volume <span id="volVal">100%</span></label>
+      <input type="range" id="volSlider" min="0" max="1" step="0.05" value="1">
+    </div>
+    <div class="field">
+      <label>Pause between sentences <span id="gapVal">Off</span></label>
+      <input type="range" id="gapSlider" min="0" max="1" step="1" value="0">
+    </div>
+  </div>
+
+  <div class="transport">
+    <button class="primary" id="playBtn">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      Play
+    </button>
+    <button class="icon-only" id="pauseBtn" disabled title="Pause">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+    </button>
+    <button class="icon-only" id="stopBtn" disabled title="Stop">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h12v12H6z"/></svg>
+    </button>
+  </div>
+
+  <div class="export-section">
+    <div class="export-heading">
+      <span class="title">Export</span>
+      <select id="formatSelect" class="format-select">
+        <option value="webm">WebM (original)</option>
+        <option value="wav" selected>WAV</option>
+        <option value="mp3">MP3</option>
+      </select>
+    </div>
+    <div class="export-row">
+      <button class="export" id="downloadBtn">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M5 20h14v-2H5v2zm7-18v12.17l3.59-3.58L17 12l-5 5-5-5 1.41-1.41L11 14.17V2h1z"/></svg>
+        Download this script
+      </button>
+    </div>
+
+    <div style="margin-top:16px;">
+      <label class="batch-toggle" id="batchToggle">
+        <span class="switch" id="batchSwitch"></span>
+        Batch export multiple tracks
+      </label>
+      <div class="batch-panel" id="batchPanel">
+        <div class="add-row">
+          <input type="text" id="batchInput" placeholder="Type a line, then press Add or hit Enter…">
+          <button id="batchAddBtn">Add</button>
+        </div>
+        <div class="queue-list" id="queueList">
+          <div class="queue-empty" id="queueEmpty">Queue is empty — add lines above, or use the button below to add the current script as a track.</div>
+        </div>
+        <div class="export-row">
+          <button class="export" id="addScriptBtn">+ Add current script as track</button>
+          <button class="export" id="exportZipBtn" disabled>Export all as ZIP (0)</button>
+        </div>
+        <div class="batch-progress" id="batchProgress"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fx-section">
+    <div class="fx-heading">
+      <span class="title">Sound FX board</span>
+      <span class="sub">original, royalty-free</span>
+    </div>
+    <div class="fx-grid" id="fxGrid"></div>
+  </div>
+
+  <div class="note" id="noteBox">
+    <b>About downloading:</b> your browser speaks text using its built-in voices rather than generating an audio file directly, so exporting works by recording that playback. Press a download button, then choose <b>“This Tab”</b> and make sure <b>Share tab audio</b> is checked in the permission prompt. WAV and MP3 are converted from that recording right in the browser — nothing is uploaded anywhere. Batch export reuses one recording permission for every track in the queue. Works most reliably in Chrome/Edge on desktop.
+  </div>
+</div>
+
+<script>
+  const synth = window.speechSynthesis;
+  const textInput = document.getElementById('textInput');
+  const voiceSelect = document.getElementById('voiceSelect');
+  const rateSlider = document.getElementById('rateSlider');
+  const pitchSlider = document.getElementById('pitchSlider');
+  const volSlider = document.getElementById('volSlider');
+  const gapSlider = document.getElementById('gapSlider');
+  const playBtn = document.getElementById('playBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const formatSelect = document.getElementById('formatSelect');
+  const waveBars = document.getElementById('waveBars');
+  const lampDot = document.getElementById('lampDot');
+  const lampText = document.getElementById('lampText');
+  const charCount = document.getElementById('charCount');
+  const readoutVoice = document.getElementById('readoutVoice');
+  const readoutRate = document.getElementById('readoutRate');
+  const readoutPitch = document.getElementById('readoutPitch');
+  const rateVal = document.getElementById('rateVal');
+  const pitchVal = document.getElementById('pitchVal');
+  const volVal = document.getElementById('volVal');
+  const gapVal = document.getElementById('gapVal');
+  const voiceCountLabel = document.getElementById('voiceCountLabel');
+  const noteBox = document.getElementById('noteBox');
+
+  const batchToggle = document.getElementById('batchToggle');
+  const batchSwitch = document.getElementById('batchSwitch');
+  const batchPanel = document.getElementById('batchPanel');
+  const batchInput = document.getElementById('batchInput');
+  const batchAddBtn = document.getElementById('batchAddBtn');
+  const addScriptBtn = document.getElementById('addScriptBtn');
+  const exportZipBtn = document.getElementById('exportZipBtn');
+  const queueList = document.getElementById('queueList');
+  const queueEmpty = document.getElementById('queueEmpty');
+  const batchProgress = document.getElementById('batchProgress');
+
+  const BAR_COUNT = 64;
+  let bars = [];
+  for(let i=0;i<BAR_COUNT;i++){
+    const b = document.createElement('span');
+    waveBars.appendChild(b);
+    bars.push(b);
+  }
+
+  let voices = [];
+  let waveTimer = null;
+  let isSpeaking = false;
+  let isRecording = false;
+  let queue = [];
+
+  function populateVoices(){
+    voices = synth.getVoices().sort((a,b)=> a.lang.localeCompare(b.lang));
+    voiceSelect.innerHTML = '';
+    voices.forEach((v,i)=>{
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = `${v.name} — ${v.lang}${v.default ? ' (default)' : ''}`;
+      voiceSelect.appendChild(opt);
+    });
+    voiceCountLabel.textContent = voices.length ? `(${voices.length} available)` : '';
+    const preferred = voices.findIndex(v => v.lang.startsWith('en') && v.default);
+    voiceSelect.value = preferred >= 0 ? preferred : 0;
+    updateReadout();
+  }
+  populateVoices();
+  if(speechSynthesis.onvoiceschanged !== undefined){
+    speechSynthesis.onvoiceschanged = populateVoices;
+  }
+
+  function updateReadout(){
+    const v = voices[voiceSelect.value];
+    readoutVoice.textContent = v ? v.name.split(' ')[0] : '—';
+    readoutRate.textContent = parseFloat(rateSlider.value).toFixed(1) + '×';
+    readoutPitch.textContent = parseFloat(pitchSlider.value).toFixed(1);
+  }
+
+  function syncSliderFill(slider){
+    const min = parseFloat(slider.min), max = parseFloat(slider.max), val = parseFloat(slider.value);
+    const pct = ((val-min)/(max-min))*100;
+    slider.style.setProperty('--fill', pct+'%');
+  }
+  [rateSlider,pitchSlider,volSlider,gapSlider].forEach(s=>syncSliderFill(s));
+
+  rateSlider.addEventListener('input', ()=>{ rateVal.textContent = parseFloat(rateSlider.value).toFixed(1)+'×'; syncSliderFill(rateSlider); updateReadout(); });
+  pitchSlider.addEventListener('input', ()=>{ pitchVal.textContent = parseFloat(pitchSlider.value).toFixed(1); syncSliderFill(pitchSlider); updateReadout(); });
+  volSlider.addEventListener('input', ()=>{ volVal.textContent = Math.round(parseFloat(volSlider.value)*100)+'%'; syncSliderFill(volSlider); });
+  gapSlider.addEventListener('input', ()=>{ gapVal.textContent = gapSlider.value == '1' ? 'On' : 'Off'; syncSliderFill(gapSlider); });
+  voiceSelect.addEventListener('change', updateReadout);
+
+  textInput.addEventListener('input', ()=>{ charCount.textContent = `${textInput.value.length} characters`; });
+  charCount.textContent = `${textInput.value.length} characters`;
+
+  function setLamp(state){
+    lampDot.className = 'lamp-dot';
+    if(state==='speaking'){ lampDot.classList.add('on'); lampText.textContent='Speaking'; }
+    else if(state==='recording'){ lampDot.classList.add('rec'); lampText.textContent='Recording'; }
+    else if(state==='paused'){ lampDot.classList.add('on'); lampText.textContent='Paused'; }
+    else { lampText.textContent='Idle'; }
+  }
+
+  function animateWave(active){
+    if(waveTimer) clearInterval(waveTimer);
+    if(!active){ bars.forEach(b=>{ b.style.height='6%'; b.classList.remove('active'); }); return; }
+    waveTimer = setInterval(()=>{
+      bars.forEach(b=>{
+        const h = 10 + Math.random()*90;
+        b.style.height = h+'%';
+        b.classList.toggle('active', isRecording);
+      });
+    }, 90);
+  }
+
+  function buildUtterance(text){
+    const shaped = gapSlider.value === '1' ? text.replace(/([.!?])\s+/g, '$1 ... ') : text;
+    const u = new SpeechSynthesisUtterance(shaped);
+    const v = voices[voiceSelect.value];
+    if(v) u.voice = v;
+    u.rate = parseFloat(rateSlider.value);
+    u.pitch = parseFloat(pitchSlider.value);
+    u.volume = parseFloat(volSlider.value);
+    return u;
+  }
+
+  function setTransportState(speaking, paused){
+    playBtn.innerHTML = paused
+      ? '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Resume'
+      : '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Play';
+    playBtn.disabled = speaking && !paused;
+    pauseBtn.disabled = !speaking || paused;
+    stopBtn.disabled = !speaking && !paused;
+  }
+
+  function speak(text, onEnd){
+    synth.cancel();
+    const u = buildUtterance(text);
+    u.onstart = ()=>{ isSpeaking = true; setLamp(isRecording ? 'recording' : 'speaking'); animateWave(true); setTransportState(true, false); };
+    u.onend = ()=>{ isSpeaking = false; setLamp('idle'); animateWave(false); setTransportState(false, false); if(onEnd) onEnd(); };
+    u.onerror = ()=>{ isSpeaking = false; setLamp('idle'); animateWave(false); setTransportState(false, false); if(onEnd) onEnd(); };
+    synth.speak(u);
+  }
+
+  playBtn.addEventListener('click', ()=>{
+    if(synth.paused){ synth.resume(); setLamp(isRecording?'recording':'speaking'); animateWave(true); setTransportState(true,false); return; }
+    const text = textInput.value.trim();
+    if(!text){ textInput.focus(); return; }
+    speak(text);
+  });
+  pauseBtn.addEventListener('click', ()=>{ synth.pause(); setLamp('paused'); animateWave(false); setTransportState(true, true); });
+  stopBtn.addEventListener('click', ()=>{ synth.cancel(); isSpeaking = false; setLamp('idle'); animateWave(false); setTransportState(false, false); });
+
+  // ---------- Audio conversion helpers ----------
+
+  async function blobToAudioBuffer(blob){
+    const arrayBuffer = await blob.arrayBuffer();
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const buffer = await ctx.decodeAudioData(arrayBuffer);
+    ctx.close();
+    return buffer;
+  }
+
+  function audioBufferToWavBlob(buffer){
+    const numChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const format = 1; // PCM
+    const bitDepth = 16;
+    let interleaved;
+    if(numChannels === 2){
+      const left = buffer.getChannelData(0);
+      const right = buffer.getChannelData(1);
+      interleaved = new Float32Array(left.length * 2);
+      for(let i=0, j=0; i<left.length; i++, j+=2){
+        interleaved[j] = left[i];
+        interleaved[j+1] = right[i];
+      }
+    } else {
+      interleaved = buffer.getChannelData(0);
+    }
+    const bytesPerSample = bitDepth/8;
+    const blockAlign = numChannels * bytesPerSample;
+    const dataLength = interleaved.length * bytesPerSample;
+    const bufferLength = 44 + dataLength;
+    const arrBuf = new ArrayBuffer(bufferLength);
+    const view = new DataView(arrBuf);
+
+    function writeString(offset, str){ for(let i=0;i<str.length;i++) view.setUint8(offset+i, str.charCodeAt(i)); }
+
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + dataLength, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, format, true);
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * blockAlign, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, bitDepth, true);
+    writeString(36, 'data');
+    view.setUint32(40, dataLength, true);
+
+    let offset = 44;
+    for(let i=0; i<interleaved.length; i++, offset+=2){
+      const s = Math.max(-1, Math.min(1, interleaved[i]));
+      view.setInt16(offset, s < 0 ? s*0x8000 : s*0x7FFF, true);
+    }
+    return new Blob([view], { type:'audio/wav' });
+  }
+
+  function audioBufferToMp3Blob(buffer){
+    const numChannels = Math.min(buffer.numberOfChannels, 2);
+    const sampleRate = buffer.sampleRate;
+    const mp3encoder = new lamejs.Mp3Encoder(numChannels, sampleRate, 128);
+    const blockSize = 1152;
+    const mp3Data = [];
+
+    function floatTo16(chData){
+      const out = new Int16Array(chData.length);
+      for(let i=0;i<chData.length;i++){
+        const s = Math.max(-1, Math.min(1, chData[i]));
+        out[i] = s < 0 ? s*0x8000 : s*0x7FFF;
+      }
+      return out;
+    }
+
+    if(numChannels === 2){
+      const left = floatTo16(buffer.getChannelData(0));
+      const right = floatTo16(buffer.getChannelData(1));
+      for(let i=0; i<left.length; i+=blockSize){
+        const lChunk = left.subarray(i, i+blockSize);
+        const rChunk = right.subarray(i, i+blockSize);
+        const mp3buf = mp3encoder.encodeBuffer(lChunk, rChunk);
+        if(mp3buf.length > 0) mp3Data.push(mp3buf);
+      }
+    } else {
+      const mono = floatTo16(buffer.getChannelData(0));
+      for(let i=0; i<mono.length; i+=blockSize){
+        const chunk = mono.subarray(i, i+blockSize);
+        const mp3buf = mp3encoder.encodeBuffer(chunk);
+        if(mp3buf.length > 0) mp3Data.push(mp3buf);
+      }
+    }
+    const end = mp3encoder.flush();
+    if(end.length > 0) mp3Data.push(end);
+    return new Blob(mp3Data, { type:'audio/mp3' });
+  }
+
+  async function convertBlob(webmBlob, format){
+    if(format === 'webm') return { blob: webmBlob, ext: 'webm' };
+    const buffer = await blobToAudioBuffer(webmBlob);
+    if(format === 'wav') return { blob: audioBufferToWavBlob(buffer), ext: 'wav' };
+    if(format === 'mp3') return { blob: audioBufferToMp3Blob(buffer), ext: 'mp3' };
+    return { blob: webmBlob, ext: 'webm' };
+  }
+
+  function triggerDownload(blob, filename){
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 2000);
+  }
+
+  function flashNote(msg, isWarning){
+    const original = noteBox.innerHTML;
+    noteBox.innerHTML = `<b>${isWarning ? 'Heads up:' : 'Done:'}</b> ${msg}`;
+    noteBox.style.borderTopColor = isWarning ? 'var(--rec)' : 'var(--green)';
+    setTimeout(()=>{ noteBox.innerHTML = original; noteBox.style.borderTopColor = 'var(--line)'; }, 6000);
+  }
+
+  // ---------- Recording (single track, own permission grant) ----------
+
+  async function acquireTabAudioStream(){
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia){
+      throw new Error('unsupported');
+    }
+    return navigator.mediaDevices.getDisplayMedia({ video:true, audio:true });
+  }
+
+  function recordTrack(audioStream, text){
+    return new Promise((resolve, reject)=>{
+      const audioTracks = audioStream.getAudioTracks();
+      if(audioTracks.length === 0){ reject(new Error('no-audio')); return; }
+      const trackStream = new MediaStream([audioTracks[0]]);
+      let recorder;
+      try{ recorder = new MediaRecorder(trackStream, { mimeType:'audio/webm' }); }
+      catch(e){ recorder = new MediaRecorder(trackStream); }
+      const chunks = [];
+      recorder.ondataavailable = e => { if(e.data.size>0) chunks.push(e.data); };
+      recorder.onstop = () => resolve(new Blob(chunks, { type:'audio/webm' }));
+      recorder.onerror = (e) => reject(e.error || new Error('recorder-error'));
+
+      isRecording = true;
+      recorder.start();
+      speak(text, ()=>{
+        setTimeout(()=>{ if(recorder.state !== 'inactive') recorder.stop(); isRecording = false; }, 350);
+      });
+    });
+  }
+
+  downloadBtn.addEventListener('click', async ()=>{
+    if(isRecording) return;
+    const text = textInput.value.trim();
+    if(!text){ textInput.focus(); return; }
+
+    let stream;
+    try{ stream = await acquireTabAudioStream(); }
+    catch(err){
+      if(err.message === 'unsupported'){
+        flashNote('Your browser does not support tab-audio capture, so it can\'t export a file here. Try Chrome or Edge on desktop.', true);
+      } else {
+        flashNote('Recording permission was cancelled, so no file was captured. Try again and allow tab-audio sharing.', true);
+      }
+      return;
+    }
+    if(stream.getAudioTracks().length === 0){
+      stream.getTracks().forEach(t=>t.stop());
+      flashNote('No audio track was shared — make sure "Share tab audio" is checked in the permission dialog, then try again.', true);
+      return;
+    }
+
+    downloadBtn.classList.add('recording');
+    downloadBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><circle cx="12" cy="12" r="6"/></svg> Recording…';
+    setLamp('recording'); animateWave(true);
+
+    try{
+      const webmBlob = await recordTrack(stream, text);
+      stream.getTracks().forEach(t=>t.stop());
+      downloadBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M5 20h14v-2H5v2zm7-18v12.17l3.59-3.58L17 12l-5 5-5-5 1.41-1.41L11 14.17V2h1z"/></svg> Converting…';
+      const format = formatSelect.value;
+      const { blob, ext } = await convertBlob(webmBlob, format);
+      const stamp = new Date().toISOString().replace(/[:.]/g,'-');
+      triggerDownload(blob, `voxreel-${stamp}.${ext}`);
+      flashNote(`Saved as a .${ext} file to your downloads.`, false);
+    }catch(err){
+      flashNote('Something went wrong while recording or converting. Please try again.', true);
+    }finally{
+      downloadBtn.classList.remove('recording');
+      downloadBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15"><path d="M5 20h14v-2H5v2zm7-18v12.17l3.59-3.58L17 12l-5 5-5-5 1.41-1.41L11 14.17V2h1z"/></svg> Download this script';
+      setLamp('idle'); animateWave(false);
+    }
+  });
+
+  // ---------- Batch queue ----------
+
+  batchToggle.addEventListener('click', ()=>{
+    const open = batchPanel.classList.toggle('open');
+    batchSwitch.classList.toggle('on', open);
+  });
+
+  function renderQueue(){
+    queueList.querySelectorAll('.queue-item').forEach(el=>el.remove());
+    queueEmpty.style.display = queue.length ? 'none' : 'block';
+    queue.forEach((item, i)=>{
+      const row = document.createElement('div');
+      row.className = 'queue-item';
+      row.innerHTML = `<span class="idx">${String(i+1).padStart(2,'0')}</span><span class="preview">${item.replace(/</g,'&lt;')}</span><button class="remove" data-i="${i}">×</button>`;
+      queueList.appendChild(row);
+    });
+    exportZipBtn.disabled = queue.length === 0 || isRecording;
+    exportZipBtn.textContent = `Export all as ZIP (${queue.length})`;
+  }
+  renderQueue();
+
+  queueList.addEventListener('click', (e)=>{
+    if(e.target.classList.contains('remove')){
+      const i = parseInt(e.target.dataset.i, 10);
+      queue.splice(i,1);
+      renderQueue();
+    }
+  });
+
+  function addToQueue(text){
+    const t = text.trim();
+    if(!t) return;
+    queue.push(t);
+    renderQueue();
+  }
+  batchAddBtn.addEventListener('click', ()=>{ addToQueue(batchInput.value); batchInput.value=''; batchInput.focus(); });
+  batchInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ addToQueue(batchInput.value); batchInput.value=''; } });
+  addScriptBtn.addEventListener('click', ()=>{ addToQueue(textInput.value); });
+
+  exportZipBtn.addEventListener('click', async ()=>{
+    if(queue.length === 0 || isRecording) return;
+    let stream;
+    try{ stream = await acquireTabAudioStream(); }
+    catch(err){
+      if(err.message === 'unsupported'){
+        flashNote('Your browser does not support tab-audio capture, so it can\'t export files here. Try Chrome or Edge on desktop.', true);
+      } else {
+        flashNote('Recording permission was cancelled, so nothing was captured. Try again and allow tab-audio sharing.', true);
+      }
+      return;
+    }
+    if(stream.getAudioTracks().length === 0){
+      stream.getTracks().forEach(t=>t.stop());
+      flashNote('No audio track was shared — make sure "Share tab audio" is checked, then try again.', true);
+      return;
+    }
+
+    exportZipBtn.disabled = true;
+    downloadBtn.disabled = true;
+    const format = formatSelect.value;
+    const zip = new JSZip();
+    const total = queue.length;
+
+    try{
+      for(let i=0; i<total; i++){
+        batchProgress.textContent = `Recording track ${i+1} of ${total}…`;
+        const webmBlob = await recordTrack(stream, queue[i]);
+        batchProgress.textContent = `Converting track ${i+1} of ${total}…`;
+        const { blob, ext } = await convertBlob(webmBlob, format);
+        const num = String(i+1).padStart(2,'0');
+        zip.file(`track-${num}.${ext}`, blob);
+        await new Promise(r=>setTimeout(r, 200));
+      }
+      batchProgress.textContent = 'Packaging ZIP…';
+      const zipBlob = await zip.generateAsync({ type:'blob' });
+      const stamp = new Date().toISOString().replace(/[:.]/g,'-');
+      triggerDownload(zipBlob, `voxreel-batch-${stamp}.zip`);
+      batchProgress.textContent = `Done — ${total} tracks saved to a .zip file.`;
+      flashNote(`Exported ${total} tracks in one .zip file.`, false);
+    }catch(err){
+      batchProgress.textContent = '';
+      flashNote('Something went wrong during batch export. Please try again.', true);
+    }finally{
+      stream.getTracks().forEach(t=>t.stop());
+      exportZipBtn.disabled = queue.length === 0;
+      downloadBtn.disabled = false;
+      setLamp('idle'); animateWave(false);
+      setTimeout(()=>{ batchProgress.textContent=''; }, 5000);
+    }
+  });
+  // ---------- Viral phrase presets ----------
+
+  const PHRASES = [
+    "No cap, this is bussin'.",
+    "It's giving main character energy.",
+    "Bruh, I was NOT ready for that.",
+    "POV: you just won the internet today.",
+    "This ain't it, chief.",
+    "Understood the assignment, no notes.",
+    "Rent free in my head, forever.",
+    "That's the tea, no crumbs left.",
+    "We move. Onward and upward.",
+    "Not the audacity of it all."
+  ];
+
+  const phraseChips = document.getElementById('phraseChips');
+  PHRASES.forEach(p=>{
+    const chip = document.createElement('button');
+    chip.className = 'chip';
+    chip.type = 'button';
+    chip.textContent = p.length > 30 ? p.slice(0,28)+'…' : p;
+    chip.title = p;
+    chip.addEventListener('click', ()=>{
+      textInput.value = p;
+      charCount.textContent = `${textInput.value.length} characters`;
+      textInput.focus();
+    });
+    phraseChips.appendChild(chip);
+  });
+
+  // ---------- Sound FX board (synthesized, not sampled) ----------
+  // Every effect below is generated from scratch with oscillators/noise —
+  // no copyrighted or third-party audio is embedded.
+
+  const FX_LIST = [
+    { id:'airhorn', label:'Airhorn', emoji:'📯', duration:1.2 },
+    { id:'ding', label:'Success Ding', emoji:'🔔', duration:1.0 },
+    { id:'scratch', label:'Record Scratch', emoji:'💿', duration:0.6 },
+    { id:'trombone', label:'Sad Trombone', emoji:'😢', duration:1.9 },
+    { id:'drumroll', label:'Drumroll + Crash', emoji:'🥁', duration:2.6 },
+    { id:'boing', label:'Cartoon Boing', emoji:'🌀', duration:0.6 },
+    { id:'bassboom', label:'Bass Boom', emoji:'💥', duration:1.0 },
+    { id:'tada', label:'Ta-da Fanfare', emoji:'🎉', duration:1.3 }
+  ];
+
+  function buildFX(id, ctx){
+    const now = ctx.currentTime;
+    if(id === 'airhorn'){
+      [0,0.35,0.7].forEach(dt=>{
+        const t = now+dt;
+        const osc = ctx.createOscillator(); osc.type='sawtooth'; osc.frequency.setValueAtTime(370,t);
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0,t);
+        gain.gain.linearRampToValueAtTime(0.8,t+0.03);
+        gain.gain.exponentialRampToValueAtTime(0.001,t+0.32);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(t); osc.stop(t+0.35);
+      });
+    } else if(id === 'ding'){
+      [660,880].forEach((f,i)=>{
+        const t = now+i*0.12;
+        const osc = ctx.createOscillator(); osc.type='sine'; osc.frequency.value=f;
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.6,t);
+        gain.gain.exponentialRampToValueAtTime(0.001,t+0.8);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(t); osc.stop(t+0.85);
+      });
+    } else if(id === 'scratch'){
+      const bufferSize = Math.floor(ctx.sampleRate*0.5);
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for(let i=0;i<bufferSize;i++) data[i] = (Math.random()*2-1)*Math.pow(1-i/bufferSize,0.3);
+      const src = ctx.createBufferSource(); src.buffer = buffer;
+      src.playbackRate.setValueAtTime(1.6, now);
+      src.playbackRate.exponentialRampToValueAtTime(0.3, now+0.45);
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.7, now);
+      gain.gain.linearRampToValueAtTime(0, now+0.5);
+      src.connect(gain).connect(ctx.destination);
+      src.start(now); src.stop(now+0.5);
+    } else if(id === 'trombone'){
+      [392,370,349,311].forEach((f,i)=>{
+        const t = now+i*0.4;
+        const osc = ctx.createOscillator(); osc.type='sawtooth'; osc.frequency.setValueAtTime(f,t);
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0,t);
+        gain.gain.linearRampToValueAtTime(0.5,t+0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001,t+0.42);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(t); osc.stop(t+0.45);
+      });
+    } else if(id === 'drumroll'){
+      const hitCount = 20;
+      for(let i=0;i<hitCount;i++){
+        const t = now+i*0.06;
+        const bufferSize = Math.floor(ctx.sampleRate*0.05);
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for(let j=0;j<bufferSize;j++) data[j] = (Math.random()*2-1)*Math.pow(1-j/bufferSize,2);
+        const src = ctx.createBufferSource(); src.buffer = buffer;
+        const gain = ctx.createGain(); gain.gain.value = 0.35;
+        src.connect(gain).connect(ctx.destination);
+        src.start(t);
+      }
+      const t0 = now + hitCount*0.06 + 0.05;
+      const bufferSize2 = Math.floor(ctx.sampleRate*0.8);
+      const buffer2 = ctx.createBuffer(1, bufferSize2, ctx.sampleRate);
+      const data2 = buffer2.getChannelData(0);
+      for(let j=0;j<bufferSize2;j++) data2[j] = (Math.random()*2-1)*Math.pow(1-j/bufferSize2,0.5);
+      const src2 = ctx.createBufferSource(); src2.buffer = buffer2;
+      const filter = ctx.createBiquadFilter(); filter.type='highpass'; filter.frequency.value=4000;
+      const gain2 = ctx.createGain();
+      gain2.gain.setValueAtTime(0.5, t0);
+      gain2.gain.exponentialRampToValueAtTime(0.001, t0+0.8);
+      src2.connect(filter).connect(gain2).connect(ctx.destination);
+      src2.start(t0); src2.stop(t0+0.8);
+    } else if(id === 'boing'){
+      const osc = ctx.createOscillator(); osc.type='sine';
+      osc.frequency.setValueAtTime(150, now);
+      osc.frequency.exponentialRampToValueAtTime(600, now+0.15);
+      osc.frequency.exponentialRampToValueAtTime(150, now+0.4);
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.6, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now+0.5);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now); osc.stop(now+0.5);
+    } else if(id === 'bassboom'){
+      const osc = ctx.createOscillator(); osc.type='sine';
+      osc.frequency.setValueAtTime(150, now);
+      osc.frequency.exponentialRampToValueAtTime(40, now+0.25);
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.9, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now+0.9);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now); osc.stop(now+0.9);
+    } else if(id === 'tada'){
+      [523.25,659.25,783.99,1046.5].forEach((f,i)=>{
+        const t = now+i*0.08;
+        const osc = ctx.createOscillator(); osc.type='triangle'; osc.frequency.value=f;
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0,t);
+        gain.gain.linearRampToValueAtTime(0.35,t+0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001,t+0.9);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(t); osc.stop(t+0.95);
+      });
+    }
+  }
+
+  let liveFxCtx = null;
+  function playFX(id, cardEl){
+    if(!liveFxCtx) liveFxCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if(liveFxCtx.state === 'suspended') liveFxCtx.resume();
+    buildFX(id, liveFxCtx);
+    cardEl.classList.add('playing');
+    const fx = FX_LIST.find(f=>f.id===id);
+    setTimeout(()=>cardEl.classList.remove('playing'), (fx ? fx.duration : 1)*1000);
+  }
+
+  async function downloadFX(id){
+    const fx = FX_LIST.find(f=>f.id===id);
+    const duration = fx ? fx.duration : 1.5;
+    const sampleRate = 44100;
+    const offlineCtx = new OfflineAudioContext(1, Math.ceil(duration*sampleRate), sampleRate);
+    buildFX(id, offlineCtx);
+    const buffer = await offlineCtx.startRendering();
+    const wavBlob = audioBufferToWavBlob(buffer);
+    triggerDownload(wavBlob, `voxreel-fx-${id}.wav`);
+    flashNote(`Saved "${fx ? fx.label : id}" as a .wav file — no permission prompt needed since it's synthesized locally.`, false);
+  }
+
+  const fxGrid = document.getElementById('fxGrid');
+  FX_LIST.forEach(fx=>{
+    const card = document.createElement('div');
+    card.className = 'fx-card';
+    card.innerHTML = `
+      <div class="fx-emoji">${fx.emoji}</div>
+      <div class="fx-label">${fx.label}</div>
+      <div class="fx-btns">
+        <button type="button" class="fx-play" title="Play">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+        <button type="button" class="fx-dl" title="Download WAV">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 20h14v-2H5v2zm7-18v12.17l3.59-3.58L17 12l-5 5-5-5 1.41-1.41L11 14.17V2h1z"/></svg>
+        </button>
+      </div>`;
+    card.querySelector('.fx-play').addEventListener('click', ()=>playFX(fx.id, card));
+    card.querySelector('.fx-dl').addEventListener('click', ()=>downloadFX(fx.id));
+    fxGrid.appendChild(card);
+  });
+</script>
+
+</body>
+</html>
